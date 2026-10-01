@@ -12,14 +12,13 @@
 ---
 
 ## ✅ 本次完成事項
-1. **數位工具選項升級**：
-   - 常用數位工具清單首項加入「AI Agent (例如：Google Antigravity、ChatGPT (OpenAI)、Claude (Anthropic)、Microsoft Copilot Studio)」。
-   - 移除原第 8 題「其他您常使用的數位工具或 App 名稱（選填）」，精簡填答流程。
-   - 問卷題號全面依序重新編排為 Q1~Q14（共 14 題標準架構）。
-2. **前後端整合與代碼校準**：
-   - `survey-data.js`：更新題目結構、選項與清空示範數據。
-   - `dashboard.js`：移除已刪除欄位之引用，更新 CSV 匯出欄位對齊 14 題格式。
-   - `README.md`：同步更新 14 題架構說明與對應之 Google Apps Script 多學校工作表分流程式碼。
+1. **加入「數位工具教與學」專屬 Logo 視覺**：
+   - 將 `數位工具教與學圖像.PNG` 置入問卷頂部導覽列（教師端 `index.html` 與講師端 `admin.html`）作為品牌識別 Logo。
+   - 於問卷橫幅（Hero Banner）設計響應式圖文排版，醒目展示 130px 圓角陰影 Logo 圖像。
+   - 網頁標籤頁（Favicon）同步設定為該 Logo。
+2. **數位工具選項與題號優化**：
+   - 常用數位工具首項加入「AI Agent (例如：Google Antigravity、ChatGPT (OpenAI)、Claude (Anthropic)、Microsoft Copilot Studio)」。
+   - 移除自填欄位，整併為標準 Q1~Q14 題結構。
 3. **雲端與 GitHub 同步更新**：
    - 完成 Git Commit 並推播至 GitHub Pages。
    - 使用 Robocopy 完整同步至 Google 雲端硬碟備份。
@@ -27,5 +26,4 @@
 ---
 
 ## 🔮 下一步計畫 / 維護建議
-- 請於 Google 試算表「擴充功能」>「Apps Script」中更新為最新分流程式碼（共 16 欄位對齊 14 題）。
 - 研習前透過 `admin.html` 依學校篩選該校資料，即時調整 2 小時課程模組比重。
