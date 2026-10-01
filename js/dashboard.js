@@ -50,10 +50,17 @@ class SurveyDashboard {
     try {
       const stored = localStorage.getItem("slc_digital_survey_responses_v1");
       if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          if (this.dataSourceBadge) this.dataSourceBadge.textContent = `現有實際填答 (${parsed.length} 筆)`;
-          return parsed;
+        let parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          // 自動過濾掉任何以 demo- 開頭的舊示範數據
+          parsed = parsed.filter(d => d.id && !d.id.startsWith("demo-"));
+          // 更新乾淨的 LocalStorage
+          localStorage.setItem("slc_digital_survey_responses_v1", JSON.stringify(parsed));
+
+          if (parsed.length > 0) {
+            if (this.dataSourceBadge) this.dataSourceBadge.textContent = `現有實際填答 (${parsed.length} 筆)`;
+            return parsed;
+          }
         }
       }
     } catch (e) {
@@ -131,7 +138,17 @@ class SurveyDashboard {
 
   renderCharts() {
     const data = this.filteredData;
-    if (typeof Chart === "undefined" || data.length === 0) return;
+    if (typeof Chart === "undefined") return;
+
+    if (data.length === 0) {
+      Object.keys(this.charts).forEach(key => {
+        if (this.charts[key]) {
+          this.charts[key].destroy();
+          this.charts[key] = null;
+        }
+      });
+      return;
+    }
 
     this.renderRolesChart(data);
     this.renderFrequencyChart(data);
