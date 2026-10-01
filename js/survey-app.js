@@ -1,5 +1,5 @@
 /**
- * 學共輔導團「數位工具教與學」問卷應用邏輯
+ * 學共輔導團「數位工具教與學」問卷應用邏輯 (教師填答端)
  */
 
 const STORAGE_KEY_RESPONSES = "slc_digital_survey_responses_v1";
@@ -46,14 +46,11 @@ class SurveyApp {
       });
     });
 
-    // 監聽鍵盤快捷鍵（Enter 快速進入下一步）
+    // 監聽鍵盤快捷鍵（Enter 快速進入下一步，排除 textarea）
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey && e.target.tagName !== "TEXTAREA") {
-        const activeView = document.getElementById("survey-view");
-        if (activeView.style.display !== "none") {
-          if (this.currentStep < this.totalSteps) {
-            this.goToNextStep();
-          }
+      if (e.key === "Enter" && !e.shiftKey && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") {
+        if (this.currentStep < this.totalSteps) {
+          this.goToNextStep();
         }
       }
     });
@@ -156,7 +153,12 @@ class SurveyApp {
 
     let contentHtml = "";
 
-    if (q.type === "radio") {
+    if (q.type === "text") {
+      const val = savedVal || "";
+      contentHtml = `
+        <input type="text" class="custom-input" name="${q.id}" id="${q.id}" value="${val}" placeholder="${q.placeholder || '請輸入內容...'}" />
+      `;
+    } else if (q.type === "radio") {
       contentHtml = `<div class="options-grid">`;
       q.options.forEach((opt, idx) => {
         const checked = savedVal === opt ? "checked" : "";
@@ -219,7 +221,7 @@ class SurveyApp {
 
     return `
       <div class="question-group" id="group-${q.id}">
-        <label class="question-label">${q.label} ${isRequired}</label>
+        <label class="question-label" for="${q.id}">${q.label} ${isRequired}</label>
         ${contentHtml}
       </div>
     `;
@@ -227,12 +229,19 @@ class SurveyApp {
 
   bindQuestionInputs(section) {
     section.questions.forEach((q) => {
-      if (q.type === "radio") {
+      if (q.type === "text") {
+        const input = document.getElementById(q.id);
+        if (input) {
+          input.addEventListener("input", (e) => {
+            this.formData[q.id] = e.target.value.trim();
+            this.saveDraft();
+          });
+        }
+      } else if (q.type === "radio") {
         const radios = document.querySelectorAll(`input[name="${q.id}"]`);
         radios.forEach((r) => {
           r.addEventListener("change", (e) => {
             this.formData[q.id] = e.target.value;
-            // 更新選中外觀
             radios.forEach((item) => {
               item.closest(".option-item").classList.toggle("selected", item.checked);
             });
@@ -327,6 +336,9 @@ class SurveyApp {
   submitSurvey() {
     if (!this.validateStep(this.currentStep, true)) return;
 
+    this.btnSubmit.disabled = true;
+    this.btnSubmit.innerHTML = `<span>⏳</span> 送出中...`;
+
     const responsePayload = {
       id: "resp-" + Date.now(),
       timestamp: new Date().toLocaleString("zh-TW", { hour12: false }),
@@ -363,7 +375,9 @@ class SurveyApp {
       }
     }
 
-    this.renderSuccessView();
+    setTimeout(() => {
+      this.renderSuccessView();
+    }, 400);
   }
 
   renderSuccessView() {
@@ -377,9 +391,6 @@ class SurveyApp {
         <h2>感謝您完成問卷調查！</h2>
         <p>您的寶貴意見已成功送出！學共輔導團將根據您的回饋精準規劃 2 小時的到校輔導課程與實作跳躍任務，期待與老師們在課堂相見！</p>
         <div class="success-buttons">
-          <button class="btn btn-primary" id="btn-view-dashboard">
-            <span>📊</span> 查看講師數據分析儀表板
-          </button>
           <button class="btn btn-secondary" id="btn-fill-another">
             <span>✍️</span> 再填寫一份
           </button>
@@ -387,15 +398,11 @@ class SurveyApp {
       </div>
     `;
 
-    document.getElementById("btn-view-dashboard").addEventListener("click", () => {
-      if (window.switchAppView) {
-        window.switchAppView("dashboard");
-      }
-    });
-
     document.getElementById("btn-fill-another").addEventListener("click", () => {
       this.formData = {};
       this.currentStep = 1;
+      this.btnSubmit.disabled = false;
+      this.btnSubmit.innerHTML = `<span>✓</span> 送出問卷調查`;
       if (progressCard) progressCard.style.display = "block";
       this.renderStep(1);
     });

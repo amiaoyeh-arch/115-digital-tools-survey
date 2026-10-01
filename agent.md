@@ -2,8 +2,9 @@
 
 ## 📌 專案概述
 - **專案名稱**：115數位工具教與學 前置問卷調查系統
-- **目標用途**：學習共同體輔導團 2 小時「數位工具教與學」入校輔導前置教師使用情形調查（RWD 響應式網頁 + 講師分析儀表板 + Google 試算表後端）
-- **發布網址**：https://amiaoyeh-arch.github.io/115-digital-tools-survey/
+- **目標用途**：學習共同體輔導團 2 小時「數位工具教與學」入校輔導前置教師使用情形調查（RWD 響應式網頁 + 講師分析儀表板 + Google 試算表多學校分流後端）
+- **教師填答網址**：https://amiaoyeh-arch.github.io/115-digital-tools-survey/
+- **講師分析後端**：https://amiaoyeh-arch.github.io/115-digital-tools-survey/admin.html
 - **GitHub 儲存庫**：https://github.com/amiaoyeh-arch/115-digital-tools-survey
 - **本機目錄**：`E:\2026AI_agent\115數位工具教與學`
 - **雲端同步目錄**：`G:\我的雲端硬碟\202607_AI學習\115數位工具教與學`
@@ -11,23 +12,22 @@
 ---
 
 ## ✅ 本次完成事項
-1. **RWD 響應式問卷網頁建置**：
-   - 包含四大維度（基本背景、工具環境、學共卡點、研習期待）共 12 題核心設計。
-   - 支援自動草稿暫存 (LocalStorage)、步驟式引導、即時防漏填驗證與流暢動畫。
-2. **題目選項客製優化**：
-   - 刪除付費軟體（LoiloNote, Kahoot, Quizizz, Blooket, Slido, Mentimeter）。
-   - 新增主流生成式 AI 與免費普及工具（Gemini, NotebookLM, Microsoft Copilot, ChatGPT/GPT）。
-3. **講師數據分析儀表板 (Dashboard)**：
-   - 提供 4 大關鍵指標（KPI）與 5 大視覺化圖表（Chart.js）。
-   - 支援 CSV (UTF-8 with BOM) 與 JSON 資料匯出、示範數據載入與教師個別提問留言看板。
-4. **雲端後端整合 (Google Apps Script Webhook)**：
-   - 串接專屬 Webhook，線上問卷送出時自動 1 秒內非同步寫入使用者的 Google 試算表（`115數位工具教與學_問卷回覆`）。
-5. **部署與多重備份**：
-   - 部署至 GitHub Pages 線上公開運作。
-   - 完整同步鏡像至 Google 雲端硬碟。
+1. **背景資料題目優化**：
+   - 新增「學校名稱（例如：新北市文林國小）」必填欄位。
+   - 年段選項移除「國中/高中部」，聚焦國小學段。
+2. **工具使用現況深化**：
+   - 新增「使用數位載具/工具頻率」單選評估。
+   - 明確常用軟體與生成式 AI 工具（Gemini, NotebookLM, Copilot, ChatGPT 等），並增加其他工具自填欄位。
+3. **前瞻架構：前後端頁面分離**：
+   - `index.html`：純淨教師填答端，無任何後端儀表板與數據干擾。
+   - `admin.html`：講師專屬分析後端，支援「依學校名稱下拉篩選」、6大視覺化圖表與 Excel CSV 匯出。
+4. **Google 試算表多學校工作表 (Tab) 自動分流**：
+   - 提供依 `school_name` 自動建立與寫入專屬 Sheet 的 Google Apps Script 程式碼。
+5. **雲端與 GitHub 同步更新**：
+   - 推播至 GitHub Pages 與 Google 雲端硬碟。
 
 ---
 
 ## 🔮 下一步計畫 / 維護建議
-- 研習前 3 天：於 Google 試算表或講師儀表板檢視問卷回收統計，掌握受輔導學校教師痛點。
-- 研習當日：講師可直接運用儀表板視覺化圖表作為開場破冰與 2 小時模組時間調配依據。
+- 請於 Google 試算表更新 Apps Script 程式碼為多工作表分流版本。
+- 研習前透過 `admin.html` 篩選該受輔導學校，即時掌握教師痛點與工具偏好。

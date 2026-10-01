@@ -1,15 +1,19 @@
 /**
- * 學共輔導團「數位工具教與學」講師數據分析儀表板
- * 基於 Chart.js 實現即時統計與資料視覺化
+ * 學共輔導團「數位工具教與學」講師數據分析儀表板 (admin.html 專用)
+ * 基於 Chart.js 實現即時統計、依學校分流篩選與資料視覺化
  */
 
 class SurveyDashboard {
   constructor() {
     this.charts = {};
-    this.currentData = [];
+    this.allData = [];
+    this.filteredData = [];
+    this.selectedSchool = "ALL";
     this.useDemoIfEmpty = true;
+
     this.initElements();
     this.bindEvents();
+    this.refresh();
   }
 
   initElements() {
@@ -17,8 +21,10 @@ class SurveyDashboard {
     this.kpiAvgDigEl = document.getElementById("kpi-avg-digital");
     this.kpiAvgJumpEl = document.getElementById("kpi-avg-jumping");
     this.kpiAiExpEl = document.getElementById("kpi-ai-readiness");
+    this.kpiSchoolInfoEl = document.getElementById("kpi-school-info");
     this.questionsFeedEl = document.getElementById("dashboard-questions-feed");
     this.dataSourceBadge = document.getElementById("data-source-badge");
+    this.schoolFilterSelect = document.getElementById("school-filter");
 
     this.btnExportCsv = document.getElementById("btn-export-csv");
     this.btnExportJson = document.getElementById("btn-export-json");
@@ -28,6 +34,13 @@ class SurveyDashboard {
   }
 
   bindEvents() {
+    if (this.schoolFilterSelect) {
+      this.schoolFilterSelect.addEventListener("change", (e) => {
+        this.selectedSchool = e.target.value;
+        this.applyFilterAndRender();
+      });
+    }
+
     if (this.btnExportCsv) this.btnExportCsv.addEventListener("click", () => this.exportCSV());
     if (this.btnExportJson) this.btnExportJson.addEventListener("click", () => this.exportJSON());
     if (this.btnLoadDemo) this.btnLoadDemo.addEventListener("click", () => this.loadDemoData());
@@ -35,7 +48,7 @@ class SurveyDashboard {
     if (this.btnSetWebhook) this.btnSetWebhook.addEventListener("click", () => this.configureWebhook());
   }
 
-  getResponses() {
+  getRawResponses() {
     try {
       const stored = localStorage.getItem("slc_digital_survey_responses_v1");
       if (stored) {
@@ -57,19 +70,48 @@ class SurveyDashboard {
     return [];
   }
 
+  populateSchoolOptions() {
+    if (!this.schoolFilterSelect) return;
+
+    // 取得所有獨立學校名稱
+    const schools = Array.from(new Set(this.allData.map(d => (d.school_name || "未指定學校").trim()))).filter(Boolean);
+
+    let html = `<option value="ALL">全部學校 (${this.allData.length} 份回覆)</option>`;
+    schools.forEach(sch => {
+      const count = this.allData.filter(d => (d.school_name || "未指定學校").trim() === sch).length;
+      html += `<option value="${this.escapeHtml(sch)}">${this.escapeHtml(sch)} (${count} 份)</option>`;
+    });
+
+    this.schoolFilterSelect.innerHTML = html;
+    this.schoolFilterSelect.value = this.selectedSchool;
+  }
+
   refresh() {
-    this.currentData = this.getResponses();
+    this.allData = this.getRawResponses();
+    this.populateSchoolOptions();
+    this.applyFilterAndRender();
+  }
+
+  applyFilterAndRender() {
+    if (this.selectedSchool === "ALL") {
+      this.filteredData = this.allData;
+      if (this.kpiSchoolInfoEl) this.kpiSchoolInfoEl.textContent = "全體學校彙整樣本數";
+    } else {
+      this.filteredData = this.allData.filter(d => (d.school_name || "未指定學校").trim() === this.selectedSchool);
+      if (this.kpiSchoolInfoEl) this.kpiSchoolInfoEl.textContent = `【${this.selectedSchool}】樣本數`;
+    }
+
     this.renderKPIs();
     this.renderCharts();
     this.renderQuestionsList();
   }
 
   renderKPIs() {
-    const data = this.currentData;
+    const data = this.filteredData;
     const total = data.length;
 
     if (total === 0) {
-      if (this.kpiTotalEl) this.kpiTotalEl.textContent = "0";
+      if (this.kpiTotalEl) this.kpiTotalEl.textContent = "0 位";
       if (this.kpiAvgDigEl) this.kpiAvgDigEl.textContent = "--";
       if (this.kpiAvgJumpEl) this.kpiAvgJumpEl.textContent = "--";
       if (this.kpiAiExpEl) this.kpiAiExpEl.textContent = "--";
@@ -94,17 +136,18 @@ class SurveyDashboard {
   }
 
   renderCharts() {
-    const data = this.currentData;
+    const data = this.filteredData;
     if (typeof Chart === "undefined" || data.length === 0) return;
 
     this.renderRolesChart(data);
+    this.renderFrequencyChart(data);
     this.renderToolsChart(data);
     this.renderHardwareChart(data);
     this.renderPainPointsRadar(data);
     this.renderModulesChart(data);
   }
 
-  // 1. 年段與領域分佈圖 (Doughnut)
+  // 1. 年段與學群分佈 (Doughnut)
   renderRolesChart(data) {
     const roleCounts = {};
     data.forEach(d => {
@@ -138,20 +181,52 @@ class SurveyDashboard {
     });
   }
 
-  // 2. 常用數位軟體工具統計 (Horizontal Bar)
+  // 2. 數位工具使用頻率 (Doughnut / Pie)
+  renderFrequencyChart(data) {
+    const freqCounts = {};
+    data.forEach(d => {
+      const freq = d.tool_frequency || "未填寫";
+      freqCounts[freq] = (freqCounts[freq] || 0) + 1;
+    });
+
+    const ctx = document.getElementById("chart-frequency");
+    if (!ctx) return;
+
+    if (this.charts.frequency) this.charts.frequency.destroy();
+
+    this.charts.frequency = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: Object.keys(freqCounts),
+        datasets: [{
+          data: Object.values(freqCounts),
+          backgroundColor: ["#40916c", "#52b788", "#74c69d", "#e9c46a", "#f4a261", "#e76f51"],
+          borderWidth: 2,
+          borderColor: "#ffffff"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 12 } } }
+        }
+      }
+    });
+  }
+
+  // 3. 常用軟體與 AI 工具排行 (Horizontal Bar)
   renderToolsChart(data) {
     const toolCounts = {};
     data.forEach(d => {
       if (Array.isArray(d.app_tools)) {
         d.app_tools.forEach(t => {
-          // 簡化標籤名稱
           const shortName = t.split(" (")[0];
           toolCounts[shortName] = (toolCounts[shortName] || 0) + 1;
         });
       }
     });
 
-    // 排序
     const sorted = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]);
     const labels = sorted.map(s => s[0]);
     const counts = sorted.map(s => s[1]);
@@ -186,7 +261,7 @@ class SurveyDashboard {
     });
   }
 
-  // 3. 校園硬體環境現況 (Bar)
+  // 4. 校園硬體環境現況 (Bar)
   renderHardwareChart(data) {
     const hwCounts = {};
     data.forEach(d => {
@@ -228,7 +303,7 @@ class SurveyDashboard {
     });
   }
 
-  // 4. 學共課堂痛點與卡點 (Radar)
+  // 5. 學共課堂痛點與卡點 (Radar)
   renderPainPointsRadar(data) {
     const painCounts = {
       "載具分心管理": 0,
@@ -291,7 +366,7 @@ class SurveyDashboard {
     });
   }
 
-  // 5. 研習模組期待排行 (Bar)
+  // 6. 研習模組期待排行 (Bar)
   renderModulesChart(data) {
     const modCounts = {};
     data.forEach(d => {
@@ -337,12 +412,12 @@ class SurveyDashboard {
   renderQuestionsList() {
     if (!this.questionsFeedEl) return;
 
-    const data = this.currentData.filter(d => d.specific_question && d.specific_question.trim() !== "");
+    const data = this.filteredData.filter(d => (d.specific_question && d.specific_question.trim() !== "") || (d.other_tools && d.other_tools.trim() !== ""));
 
     if (data.length === 0) {
       this.questionsFeedEl.innerHTML = `
         <div style="text-align:center; padding: 24px; color: #888;">
-          目前尚無教師提出個別問題，可於課堂現場即時發問。
+          目前所選範圍尚無個別提問，可於研習現場即時交流。
         </div>
       `;
       return;
@@ -350,16 +425,20 @@ class SurveyDashboard {
 
     let html = "";
     data.forEach(item => {
+      const sch = item.school_name || "未指定學校";
       const subjectStr = Array.isArray(item.teaching_subject) ? item.teaching_subject.join("、") : (item.teaching_subject || "綜合");
+      const otherToolsBadge = item.other_tools ? `<span style="display:inline-block; background:#e8f4f8; color:#1d3557; padding:2px 8px; border-radius:10px; font-size:0.75rem; margin-top:4px;">🛠️ 自填工具: ${this.escapeHtml(item.other_tools)}</span>` : "";
+      
       html += `
         <div class="question-post-card">
           <div class="question-post-header">
-            <span>🏷️ ${item.school_role || "教師"} ｜ ${subjectStr}</span>
+            <span>🏫 <strong>${this.escapeHtml(sch)}</strong> ｜ ${item.school_role || "教師"} ｜ ${subjectStr}</span>
             <span>🕒 ${item.timestamp || "近期"}</span>
           </div>
           <div class="question-post-content">
-            「${this.escapeHtml(item.specific_question)}」
+            ${item.specific_question ? `「${this.escapeHtml(item.specific_question)}」` : "（未填寫個別提問）"}
           </div>
+          ${otherToolsBadge}
         </div>
       `;
     });
@@ -395,28 +474,28 @@ class SurveyDashboard {
 
   configureWebhook() {
     const current = localStorage.getItem("slc_survey_webhook_url") || "";
-    const input = prompt("請輸入 Google Apps Script Webhook 網址（留空則停用外部同步）：", current);
+    const input = prompt("請輸入 Google Apps Script Webhook 網址（留空則使用系統預設）：", current);
     if (input !== null) {
       if (input.trim() === "") {
         localStorage.removeItem("slc_survey_webhook_url");
-        alert("已停用 Webhook 外部同步功能。");
+        alert("已重設為系統預設 Webhook。");
       } else {
         localStorage.setItem("slc_survey_webhook_url", input.trim());
-        alert("Webhook 網址已儲存！新問卷提交時將自動同步發送。");
+        alert("Webhook 網址已儲存！");
       }
     }
   }
 
   exportCSV() {
-    const data = this.currentData;
+    const data = this.filteredData;
     if (data.length === 0) {
       alert("目前尚無資料可供匯出！");
       return;
     }
 
     const headers = [
-      "ID", "填寫時間", "任教年段", "主要領域", "教學年資",
-      "硬體設備現況", "常用數位軟體", "AI使用經驗",
+      "ID", "填寫時間", "學校名稱", "任教年段", "主要領域", "教學年資",
+      "硬體設備現況", "數位工具使用頻率", "常用數位工具類別與名稱", "其他工具名稱", "AI使用經驗",
       "學共融入環節", "最大卡點", "數位操作信心度(1-5)", "跳躍任務信心度(1-5)",
       "期待研習模組", "現場個別提問"
     ];
@@ -424,11 +503,14 @@ class SurveyDashboard {
     const rows = data.map(d => [
       d.id || "",
       d.timestamp || "",
+      d.school_name || "",
       d.school_role || "",
       Array.isArray(d.teaching_subject) ? d.teaching_subject.join(";") : (d.teaching_subject || ""),
       d.teaching_years || "",
       Array.isArray(d.hardware_env) ? d.hardware_env.join(";") : (d.hardware_env || ""),
+      d.tool_frequency || "",
       Array.isArray(d.app_tools) ? d.app_tools.join(";") : (d.app_tools || ""),
+      d.other_tools || "",
       d.ai_experience || "",
       Array.isArray(d.slc_stages) ? d.slc_stages.join(";") : (d.slc_stages || ""),
       Array.isArray(d.pain_points) ? d.pain_points.join(";") : (d.pain_points || ""),
@@ -444,63 +526,35 @@ class SurveyDashboard {
       csvContent += r.map(field => `"${field}"`).join(",") + "\r\n";
     });
 
+    const schoolLabel = this.selectedSchool === "ALL" ? "全校彙整" : this.selectedSchool;
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `學共輔導團_數位工具問卷調查統計_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `學共輔導團_${schoolLabel}_問卷統計_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   }
 
   exportJSON() {
-    const data = this.currentData;
+    const data = this.filteredData;
     if (data.length === 0) {
       alert("目前尚無資料可供匯出！");
       return;
     }
 
+    const schoolLabel = this.selectedSchool === "ALL" ? "全校彙整" : this.selectedSchool;
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
     const link = document.createElement("a");
     link.setAttribute("href", dataStr);
-    link.setAttribute("download", `學共輔導團_問卷資料匯出_${new Date().toISOString().slice(0,10)}.json`);
+    link.setAttribute("download", `學共輔導團_${schoolLabel}_問卷資料_${new Date().toISOString().slice(0,10)}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   }
 }
 
-// 全域切換檢視功能
-window.switchAppView = function(viewName) {
-  const surveyView = document.getElementById("survey-view");
-  const dashboardView = document.getElementById("dashboard-view");
-  const btnNavSurvey = document.getElementById("nav-survey-tab");
-  const btnNavDash = document.getElementById("nav-dashboard-tab");
-
-  if (viewName === "dashboard") {
-    surveyView.style.display = "none";
-    dashboardView.style.display = "block";
-    btnNavSurvey.classList.remove("active");
-    btnNavDash.classList.add("active");
-
-    if (!window.surveyDashboardInstance) {
-      window.surveyDashboardInstance = new SurveyDashboard();
-    }
-    window.surveyDashboardInstance.refresh();
-  } else {
-    dashboardView.style.display = "none";
-    surveyView.style.display = "block";
-    btnNavDash.classList.remove("active");
-    btnNavSurvey.classList.add("active");
-  }
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
-
 window.addEventListener("DOMContentLoaded", () => {
-  const navSurvey = document.getElementById("nav-survey-tab");
-  const navDash = document.getElementById("nav-dashboard-tab");
-
-  if (navSurvey) navSurvey.addEventListener("click", () => window.switchAppView("survey"));
-  if (navDash) navDash.addEventListener("click", () => window.switchAppView("dashboard"));
+  window.surveyDashboardInstance = new SurveyDashboard();
 });

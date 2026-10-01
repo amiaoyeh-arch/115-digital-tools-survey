@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>學共輔導團｜講師專屬數據分析儀表板</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js CDN for Visual Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- 頂部導覽列 (講師專屬) -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="logo-area">
+        <div class="logo-icon">📊</div>
+        <div class="logo-text">
+          <h1>學共輔導團・講師專屬後端</h1>
+          <p>「數位工具教與學」全校問卷統計與痛點診斷分析</p>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <a href="index.html" class="btn-nav" style="text-decoration: none;">
+          <span>📝</span> 前往填答頁面
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-wrapper" style="max-width: 1080px;">
+
+    <!-- ==========================================
+         輔導團講師數據儀表板 (Dashboard View)
+         ========================================== -->
+    <div id="dashboard-view" style="display: block;">
+      
+      <!-- 儀表板控制列 -->
+      <div class="dashboard-header-card">
+        <div class="dashboard-title">
+          <h2>📊 全校數位教學現況與研習需求儀表板</h2>
+          <p>輔導團講師專屬・即時統計分析與實體研習規劃依據 <span id="data-source-badge" style="background:#e8f5e9; color:#2d6a4f; padding:2px 8px; border-radius:12px; font-weight:700; font-size:0.75rem; margin-left:6px;">即時統計</span></p>
+        </div>
+        
+        <div class="dashboard-toolbar">
+          <!-- 學校篩選下拉選單 -->
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="school-filter" style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">🏫 學校：</label>
+            <select id="school-filter" class="school-filter-select">
+              <option value="ALL">全部學校 (全體彙整)</option>
+            </select>
+          </div>
+
+          <button class="btn-outline" id="btn-export-csv" title="匯出為 Excel 相容的 CSV 檔案">
+            <span>📥</span> 匯出 CSV (Excel)
+          </button>
+          <button class="btn-outline" id="btn-export-json" title="匯出 JSON 資料備份">
+            <span>💾</span> 匯出 JSON
+          </button>
+          <button class="btn-outline" id="btn-load-demo" title="載入示範數據供簡報演示">
+            <span>🎲</span> 載入示範資料
+          </button>
+          <button class="btn-outline" id="btn-set-webhook" title="設定 Google 試算表 Webhook 同步">
+            <span>🔗</span> 雲端同步設定
+          </button>
+          <button class="btn-outline" id="btn-clear-data" style="color: #c0392b;" title="清空所有本機調查資料">
+            <span>🗑️</span> 清除數據
+          </button>
+        </div>
+      </div>
+
+      <!-- 核心關鍵指標卡片 (KPIs) -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">已回收問卷數</div>
+          <div class="kpi-value" id="kpi-total-responses">0 位</div>
+          <div class="kpi-subtext" id="kpi-school-info">目前篩選範疇內教師樣本數</div>
+        </div>
+        <div class="kpi-card kpi-info">
+          <div class="kpi-label">數位載具操作信心度</div>
+          <div class="kpi-value" id="kpi-avg-digital">--</div>
+          <div class="kpi-subtext">全校平均滿意評分 (滿分5分)</div>
+        </div>
+        <div class="kpi-card kpi-warning">
+          <div class="kpi-label">學共跳躍任務設計信心度</div>
+          <div class="kpi-value" id="kpi-avg-jumping">--</div>
+          <div class="kpi-subtext">伸展跳躍任務自評 (滿分5分)</div>
+        </div>
+        <div class="kpi-card kpi-accent">
+          <div class="kpi-label">生成式 AI 接觸率</div>
+          <div class="kpi-value" id="kpi-ai-readiness">--</div>
+          <div class="kpi-subtext">曾用於備課或教學實踐之佔比</div>
+        </div>
+      </div>
+
+      <!-- 圖表視覺化網格 -->
+      <div class="charts-grid">
+        <!-- 圖表 1: 任教年段分佈 -->
+        <div class="chart-card">
+          <h3><span>👥</span> 任教年段與學群分佈</h3>
+          <p>了解本次到校研習教師的年段結構</p>
+          <div class="chart-wrapper">
+            <canvas id="chart-roles"></canvas>
+          </div>
+        </div>
+
+        <!-- 圖表 2: 數位工具使用頻率 -->
+        <div class="chart-card">
+          <h3><span>⏱️</span> 數位載具/工具課堂使用頻率</h3>
+          <p>掌握教師於常態課堂融入載具的常規節奏</p>
+          <div class="chart-wrapper">
+            <canvas id="chart-frequency"></canvas>
+          </div>
+        </div>
+
+        <!-- 圖表 3: 常用教學軟體排行 -->
+        <div class="chart-card">
+          <h3><span>🛠️</span> 常用教學工具與 AI 平台排行</h3>
+          <p>掌握全校現有熟悉度最高的軟體與 AI 工具</p>
+          <div class="chart-wrapper">
+            <canvas id="chart-tools"></canvas>
+          </div>
+        </div>
+
+        <!-- 圖表 4: 教室硬體與生生載具現況 -->
+        <div class="chart-card">
+          <h3><span>💻</span> 教室硬體與生生載具現況</h3>
+          <p>評估研習當日分組實作與實體教室環境條件</p>
+          <div class="chart-wrapper">
+            <canvas id="chart-hardware"></canvas>
+          </div>
+        </div>
+
+        <!-- 圖表 5: 學共融入卡點與痛點雷達圖 -->
+        <div class="chart-card">
+          <h3><span>🎯</span> 學共課堂數位融入卡點雷達</h3>
+          <p>診斷現場教師最需要輔導團破除的教學瓶頸</p>
+          <div class="chart-wrapper">
+            <canvas id="chart-painpoints"></canvas>
+          </div>
+        </div>
+
+        <!-- 圖表 6: 2小時研習模組期待熱度排行 -->
+        <div class="chart-card full-width">
+          <h3><span>🔥</span> 2 小時到校輔導研習模組期待排行</h3>
+          <p>講師據此配置 2 小時模組時間比例（例如：AI 備課 vs. 小組共學實作 vs. 跳躍任務設計）</p>
+          <div class="chart-wrapper tall">
+            <canvas id="chart-modules"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 個別提問與開放回饋卡片列表 -->
+      <div class="chart-card full-width" style="margin-bottom: 30px;">
+        <h3><span>💡</span> 教師個別提問與課堂難題留言板</h3>
+        <p>輔導團講師可於 2 小時輔導的「現場 Q&A 或綜合座談」環節逐一回饋解答</p>
+        <div class="questions-feed" id="dashboard-questions-feed">
+          <!-- 文字卡片將由 dashboard.js 動態注入 -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- 全域提示訊息浮層 (Toast) -->
+  <div id="toast" class="toast-msg"></div>
+
+  <!-- 應用程式腳本 -->
+  <script src="js/survey-data.js"></script>
+  <script src="js/dashboard.js"></script>
+
+</body>
+</html>
