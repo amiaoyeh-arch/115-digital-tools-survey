@@ -1,0 +1,12 @@
+# Dependencies & System
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+
+# IDE & Gemini
+.vscode/
+.idea/
+.gemini/
+.claude/
