@@ -105,6 +105,7 @@ const SURVEY_CONFIG = {
           type: "checkbox",
           required: true,
           options: [
+            "AI Agent (例如：Google Antigravity、ChatGPT (OpenAI)、Claude (Anthropic)、Microsoft Copilot Studio)",
             "Gemini (Google AI 備課與教學對話)",
             "NotebookLM (AI 筆記與教材知識庫)",
             "Microsoft Copilot (微軟 AI 智慧助手)",
@@ -118,15 +119,8 @@ const SURVEY_CONFIG = {
           ]
         },
         {
-          id: "other_tools",
-          label: "8. 其他您常使用的數位工具或 App 名稱（選填）",
-          type: "text",
-          required: false,
-          placeholder: "例如：Wordwall, Quizizz, Kahoot, Lumio, GeoGebra 等"
-        },
-        {
           id: "ai_experience",
-          label: "9. 您對「生成式 AI (如 ChatGPT, Gemini, NotebookLM 等)」的使用經驗",
+          label: "8. 您對「生成式 AI / AI Agent」的使用經驗",
           type: "radio",
           required: true,
           options: [
@@ -134,7 +128,7 @@ const SURVEY_CONFIG = {
             "初學體驗中（曾玩過聊天對話、生圖等）",
             "個人備課應用（會請 AI 生成教案初稿、講義、試題）",
             "課堂教學融入（已引導學生使用 AI 進行探究、對話或提問）",
-            "深度應用專家（熟練 Prompt 咒語、客製化 GPTs、整合多款工具）"
+            "深度應用專家（熟練 Prompt 咒語、客製化 GPTs/Agents、整合多款工具）"
           ]
         }
       ]
@@ -147,7 +141,7 @@ const SURVEY_CONFIG = {
       questions: [
         {
           id: "slc_stages",
-          label: "10. 您最希望將數位工具運用在學習共同體的哪一個環節？（可複選）",
+          label: "9. 您最希望將數位工具運用在學習共同體的哪一個環節？（可複選）",
           type: "checkbox",
           required: true,
           options: [
@@ -161,7 +155,7 @@ const SURVEY_CONFIG = {
         },
         {
           id: "pain_points",
-          label: "11. 在推動數位工具與學共結合時，您面臨的最大卡點是什麼？（可複選，最多選3項）",
+          label: "10. 在推動數位工具與學共結合時，您面臨的最大卡點是什麼？（可複選，最多選3項）",
           type: "checkbox",
           required: true,
           maxSelect: 3,
@@ -177,7 +171,7 @@ const SURVEY_CONFIG = {
         },
         {
           id: "confidence_digital",
-          label: "12. 您對「在課堂中操作數位載具與互動軟體」的整體信心度 (1~5分)",
+          label: "11. 您對「在課堂中操作數位載具與互動軟體」的整體信心度 (1~5分)",
           type: "rating",
           required: true,
           min: 1,
@@ -187,7 +181,7 @@ const SURVEY_CONFIG = {
         },
         {
           id: "confidence_jumping_task",
-          label: "13. 您對「運用數位工具/AI 設計學共伸展跳躍任務」的信心度 (1~5分)",
+          label: "12. 您對「運用數位工具/AI 設計學共伸展跳躍任務」的信心度 (1~5分)",
           type: "rating",
           required: true,
           min: 1,
@@ -205,11 +199,11 @@ const SURVEY_CONFIG = {
       questions: [
         {
           id: "workshop_modules",
-          label: "14. 針對本次 2 小時到校輔導，您最想學習/體驗的實作模組？（可複選）",
+          label: "13. 針對本次 2 小時到校輔導，您最想學習/體驗的實作模組？（可複選）",
           type: "checkbox",
           required: true,
           options: [
-            "【模組A】生成式 AI 輔助學共教案與跳躍任務命題實戰 (ChatGPT / Gemini / NotebookLM)",
+            "【模組A】生成式 AI 與 AI Agent 輔助學共教案與跳躍任務命題實戰 (Antigravity / ChatGPT / Gemini / NotebookLM)",
             "【模組B】小組共學互學神器：Padlet 與免付費數位互動工具在學共課堂的實務操作",
             "【模組C】課堂傾聽與思維可視化：用數位工具記錄學生對話與高光頓悟",
             "【模組D】破除數位分心：學習共同體下的載具班級經營與課堂常規建立",
@@ -219,7 +213,7 @@ const SURVEY_CONFIG = {
         },
         {
           id: "specific_question",
-          label: "15. 您在「數位教學」或「學習共同體」上最想向輔導團講師請教的具體問題或需求（選填）：",
+          label: "14. 您在「數位教學」或「學習共同體」上最想向輔導團講師請教的具體問題或需求（選填）：",
           type: "textarea",
           required: false,
           placeholder: "例如：在數學科高難度題目上，如何用 iPad 讓每組看到不同思考路徑？或是低年級學生如何快速登入不卡關？"

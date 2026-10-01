@@ -423,7 +423,7 @@ class SurveyDashboard {
   renderQuestionsList() {
     if (!this.questionsFeedEl) return;
 
-    const data = this.filteredData.filter(d => (d.specific_question && d.specific_question.trim() !== "") || (d.other_tools && d.other_tools.trim() !== ""));
+    const data = this.filteredData.filter(d => d.specific_question && d.specific_question.trim() !== "");
 
     if (data.length === 0) {
       this.questionsFeedEl.innerHTML = `
@@ -438,7 +438,6 @@ class SurveyDashboard {
     data.forEach(item => {
       const sch = item.school_name || "未指定學校";
       const subjectStr = Array.isArray(item.teaching_subject) ? item.teaching_subject.join("、") : (item.teaching_subject || "綜合");
-      const otherToolsBadge = item.other_tools ? `<span style="display:inline-block; background:#e8f4f8; color:#1d3557; padding:2px 8px; border-radius:10px; font-size:0.75rem; margin-top:4px;">🛠️ 自填工具: ${this.escapeHtml(item.other_tools)}</span>` : "";
       
       html += `
         <div class="question-post-card">
@@ -449,7 +448,6 @@ class SurveyDashboard {
           <div class="question-post-content">
             ${item.specific_question ? `「${this.escapeHtml(item.specific_question)}」` : "（未填寫個別提問）"}
           </div>
-          ${otherToolsBadge}
         </div>
       `;
     });
@@ -465,14 +463,6 @@ class SurveyDashboard {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-  }
-
-  loadDemoData() {
-    if (typeof DEMO_RESPONSES !== "undefined") {
-      localStorage.setItem("slc_digital_survey_responses_v1", JSON.stringify(DEMO_RESPONSES));
-      this.refresh();
-      alert("已成功載入 5 筆示範模擬問卷數據！");
-    }
   }
 
   clearAllData() {
@@ -506,7 +496,7 @@ class SurveyDashboard {
 
     const headers = [
       "ID", "填寫時間", "學校名稱", "任教年段", "主要領域", "教學年資",
-      "硬體設備現況", "數位工具使用頻率", "常用數位工具類別與名稱", "其他工具名稱", "AI使用經驗",
+      "硬體設備現況", "數位工具使用頻率", "常用數位工具類別與名稱", "AI使用經驗",
       "學共融入環節", "最大卡點", "數位操作信心度(1-5)", "跳躍任務信心度(1-5)",
       "期待研習模組", "現場個別提問"
     ];
@@ -521,7 +511,6 @@ class SurveyDashboard {
       Array.isArray(d.hardware_env) ? d.hardware_env.join(";") : (d.hardware_env || ""),
       d.tool_frequency || "",
       Array.isArray(d.app_tools) ? d.app_tools.join(";") : (d.app_tools || ""),
-      d.other_tools || "",
       d.ai_experience || "",
       Array.isArray(d.slc_stages) ? d.slc_stages.join(";") : (d.slc_stages || ""),
       Array.isArray(d.pain_points) ? d.pain_points.join(";") : (d.pain_points || ""),
