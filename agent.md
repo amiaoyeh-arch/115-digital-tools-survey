@@ -11,18 +11,21 @@
 
 ---
 
-## ✅ 本次完成事項
-1. **Google 試算表即時雙向同步機制（純唯讀保證）**：
-   - Apps Script 新增 `doGet(e)` 函式，自動輪詢試算表內所有學校分頁（Tabs），將全體教師回覆整合為 JSON API。
-   - 講師端 `admin.html` 與 `dashboard.js` 實現開頁自動同步、手動「🔄 同步試算表數據」與離線快取功能。
-   - 完全移除清除資料按鈕，網頁端只進行即時唯讀檢視、圖表統計與 CSV/JSON 匯出，絕對不修改/刪除試算表原始資料。
-2. **加入專屬品牌 Logo 視覺**：
-   - 於頂部導覽列、問卷橫幅（Hero Banner）與 Favicon 置入 `數位工具教與學圖像.PNG`。
-3. **雲端與 GitHub 同步更新**：
-   - 完成 Git Commit 並推播至 GitHub Pages。
-   - 使用 Robocopy 完整同步至 Google 雲端硬碟備份。
+## ✅ 完成事項
+1. **Logo 品牌視覺整合**：
+   - 頂部導覽列、問卷橫幅（Hero Banner）與瀏覽器頁籤（Favicon）已全面置入專屬圓角陰影 Logo（`數位工具教與學圖像.PNG`）。
+2. **題目結構優化（標準 14 題）**：
+   - 常用數位工具清單首項新增「AI Agent (例如：Google Antigravity、ChatGPT (OpenAI)、Claude (Anthropic)、Microsoft Copilot Studio)」。
+   - 移除自填題目，精簡填答體驗，題號依序重新編排為 Q1~Q14。
+3. **Google 試算表即時雙向同步機制（純唯讀保證）**：
+   - Apps Script 部署 `doGet(e)` 與 `doPost(e)`，支援依學校自動建立工作表分頁並支援即時 JSON 讀取 API。
+   - 講師分析端（`admin.html`）實現自動開頁同步、手動「🔄 同步試算表數據」、最後同步時間指示與離線快取保護。
+   - 完全移除清除數據功能，確保後端試算表資料 100% 唯讀安全，不被修改或刪除。
+4. **雲端與 GitHub 同步更新**：
+   - 程式碼已全數推播至 GitHub Pages。
+   - 檔案已透過 Robocopy 完整備份至 Google 雲端硬碟。
 
 ---
 
-## 🔮 下一步計畫 / 操作指引
-- 請於 Google 試算表「擴充功能」>「Apps Script」貼上包含 `doGet` 與 `doPost` 的完整最新程式碼，並點擊「部署」>「管理部署作業」>「編輯」> 選擇「新版本」完成發布。
+## 🔮 下一步計畫 / 備忘
+- 研習現場或行前會議時，講師可直接開啟 `admin.html`，透過「🏫 學校下拉選單」切換檢視特定學校之教師問卷統計與痛點分析。
