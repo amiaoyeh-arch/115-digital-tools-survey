@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 學共輔導團「數位工具教與學」講師數據分析儀表板 (admin.html 專用)
  * 基於 Chart.js 實現即時統計、依學校分流篩選與資料視覺化
  * 具備與 Google 試算表 (Google Apps Script) 即時雙向讀取同步功能（純唯讀，不破壞後端數據）
@@ -154,7 +154,7 @@ class SurveyDashboard {
       }
       
       if (isManual) {
-        alert("無法從 Google 試算表同步資料，可能原因：\n1. Google Apps Script 尚未更新為包含「doGet」的新版本。\n2. 試算表網址有誤或網路連線受限。\n\n目前畫面已為您保留最近一次的填答紀錄。");
+        alert(`無法從 Google 試算表同步資料，可能原因：\n1. Google Apps Script 尚未部署為包含「doGet」的新版本。\n2. 試算表 Webhook 網址設定有誤或瀏覽器快取尚未更新。\n\n詳細錯誤：${err.message || err}\n\n目前畫面已為您保留最近一次的填答紀錄。`);
       }
     } finally {
       this.isSyncing = false;
