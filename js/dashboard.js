@@ -9,7 +9,7 @@ class SurveyDashboard {
     this.allData = [];
     this.filteredData = [];
     this.selectedSchool = "ALL";
-    this.useDemoIfEmpty = true;
+    this.useDemoIfEmpty = false;
 
     this.initElements();
     this.bindEvents();
@@ -28,7 +28,6 @@ class SurveyDashboard {
 
     this.btnExportCsv = document.getElementById("btn-export-csv");
     this.btnExportJson = document.getElementById("btn-export-json");
-    this.btnLoadDemo = document.getElementById("btn-load-demo");
     this.btnClearData = document.getElementById("btn-clear-data");
     this.btnSetWebhook = document.getElementById("btn-set-webhook");
   }
@@ -43,7 +42,6 @@ class SurveyDashboard {
 
     if (this.btnExportCsv) this.btnExportCsv.addEventListener("click", () => this.exportCSV());
     if (this.btnExportJson) this.btnExportJson.addEventListener("click", () => this.exportJSON());
-    if (this.btnLoadDemo) this.btnLoadDemo.addEventListener("click", () => this.loadDemoData());
     if (this.btnClearData) this.btnClearData.addEventListener("click", () => this.clearAllData());
     if (this.btnSetWebhook) this.btnSetWebhook.addEventListener("click", () => this.configureWebhook());
   }
@@ -62,11 +60,7 @@ class SurveyDashboard {
       console.warn("讀取本機資料失敗", e);
     }
 
-    if (this.useDemoIfEmpty && typeof DEMO_RESPONSES !== "undefined") {
-      if (this.dataSourceBadge) this.dataSourceBadge.textContent = `示範模擬資料 (${DEMO_RESPONSES.length} 筆)`;
-      return DEMO_RESPONSES;
-    }
-
+    if (this.dataSourceBadge) this.dataSourceBadge.textContent = "尚無填答數據 (0 筆)";
     return [];
   }
 

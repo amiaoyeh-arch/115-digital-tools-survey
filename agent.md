@@ -21,7 +21,9 @@
 3. **前瞻架構：前後端頁面分離**：
    - `index.html`：純淨教師填答端，無任何後端儀表板與數據干擾。
    - `admin.html`：講師專屬分析後端，支援「依學校名稱下拉篩選」、6大視覺化圖表與 Excel CSV 匯出。
-4. **Google 試算表多學校工作表 (Tab) 自動分流**：
+4. **清除示範數據 (Clean State)**：
+   - 已全數清空 5 筆預設 Demo 資料，系統處於乾淨初始狀態，等待各校教師真實填答。
+5. **Google 試算表多學校工作表 (Tab) 自動分流**：
    - 提供依 `school_name` 自動建立與寫入專屬 Sheet 的 Google Apps Script 程式碼。
 5. **雲端與 GitHub 同步更新**：
    - 推播至 GitHub Pages 與 Google 雲端硬碟。
