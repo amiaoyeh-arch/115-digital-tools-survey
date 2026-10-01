@@ -5,6 +5,7 @@
 const STORAGE_KEY_RESPONSES = "slc_digital_survey_responses_v1";
 const STORAGE_KEY_DRAFT = "slc_digital_survey_draft_v1";
 const STORAGE_KEY_WEBHOOK = "slc_survey_webhook_url";
+const DEFAULT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzBTtOKUlpt13xESLsU1z-IhaUUmVwMw6bQfNCKdhD_aWYXvLqQTm0vZTvDIyXboJgeXA/exec";
 
 class SurveyApp {
   constructor() {
@@ -347,8 +348,8 @@ class SurveyApp {
     localStorage.setItem(STORAGE_KEY_RESPONSES, JSON.stringify(allResponses));
     this.clearDraft();
 
-    // 如果有設定 Webhook (例如 Google Apps Script)
-    const webhookUrl = localStorage.getItem(STORAGE_KEY_WEBHOOK);
+    // 自動同步至 Google 試算表 Webhook
+    const webhookUrl = localStorage.getItem(STORAGE_KEY_WEBHOOK) || DEFAULT_WEBHOOK_URL;
     if (webhookUrl && webhookUrl.startsWith("http")) {
       try {
         fetch(webhookUrl, {
