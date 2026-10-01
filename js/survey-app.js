@@ -375,7 +375,7 @@ class SurveyApp {
       <div class="success-card">
         <div class="success-icon">✓</div>
         <h2>感謝您完成問卷調查！</h2>
-        <p>您的寶貴意見已成功送出！學共輔導團將根據您的回饋精準規劃 3 小時的到校輔導課程與實作跳躍任務，期待與老師們在課堂相見！</p>
+        <p>您的寶貴意見已成功送出！學共輔導團將根據您的回饋精準規劃 2 小時的到校輔導課程與實作跳躍任務，期待與老師們在課堂相見！</p>
         <div class="success-buttons">
           <button class="btn btn-primary" id="btn-view-dashboard">
             <span>📊</span> 查看講師數據分析儀表板
