@@ -11,8 +11,10 @@
    - 專為受訪教師設計，無任何後端統計干擾，手機/平板/電腦完美適配。
    - 包含學校名稱、年段（聚焦國小）、學科領域、年資、硬體環境、數位載具使用頻率、常用軟體與 AI Agent 工具、學共卡點與 2 小時研習模組期待。
    - 支援自動草稿暫存與即時防漏填驗證。
-2. **講師專屬分析後端 (`admin.html`)**：
+2. **講師專屬即時分析後端 (`admin.html`)**：
    - 僅供輔導團講師檢視與分析，不向填寫教師公開。
+   - **雲端試算表雙向即時同步**：網頁載入時自動從 Google 試算表拉取各校最新數據，亦可隨時點擊「🔄 同步試算表數據」。
+   - **完全唯讀模式（Read-Only）**：網頁端僅進行統計與視覺化呈現，**絕對不會修改或刪除 Google 試算表上的任何原始數據**。
    - **支援「依學校名稱下拉篩選」**（可檢視全體彙整或單一學校數據）。
    - 提供 4 大關鍵指標（KPI）與 6 大視覺化互動圖表（年段、使用頻率、工具排行、硬體現況、痛點雷達、模組期待）。
    - 一鍵匯出該校 Excel CSV (UTF-8 BOM) 或 JSON 備份檔。
@@ -26,13 +28,15 @@
 ```
 E:\2026AI_agent\115數位工具教與學\
 ├── index.html              # 教師填答入口 (公開分享給各校老師)
-├── admin.html              # 講師專屬後端分析儀表板 (講師專用，依學校篩選與匯出)
+├── admin.html              # 講師專屬後端分析儀表板 (即時同步試算表、依校篩選、匯出)
+├── logo.png                # 數位工具教與學品牌 Logo
+├── 數位工具教與學圖像.PNG   # 原始高解析 Logo 圖檔
 ├── css/
-│   └── style.css           # 學共溫潤綠風格與 RWD 樣式
+│   └── style.css           # 學共溫潤綠風格、RWD 響應式與圖表樣式
 ├── js/
-│   ├── survey-data.js      # 問卷題目定義與示範資料庫
-│   ├── survey-app.js       # 表單渲染與 Webhook 同步邏輯 (教師端)
-│   └── dashboard.js        # 講師分析儀表板與學校篩選邏輯 (admin端)
+│   ├── survey-data.js      # 問卷題目定義（14題標準版）
+│   ├── survey-app.js       # 表單渲染與 Webhook 送出邏輯 (教師端)
+│   └── dashboard.js        # 講師分析儀表板與試算表即時讀取同步邏輯 (admin端)
 └── README.md               # 專案說明與 Apps Script 部署指引
 ```
 
@@ -70,11 +74,18 @@ E:\2026AI_agent\115數位工具教與學\
 
 ---
 
-## ⚙️ Google Apps Script 多學校工作表分流程式碼
+## ⚙️ Google Apps Script 多學校分流與即時讀取程式碼
 
-請於您的 Google 試算表「擴充功能」>「Apps Script」中貼上下方程式碼並**重新部署**，即可達成「依學校名稱自動建立專屬工作表 Tab」：
+請於您的 Google 試算表「擴充功能」>「Apps Script」中貼上下方程式碼並**重新部署（版本選擇「新版本」，權限選擇「所有人」）**：
 
 ```javascript
+/**
+ * 學習共同體輔導團｜「數位工具教與學」問卷後端 Google Apps Script
+ * 功能：
+ * 1. doPost(e): 依據學校名稱自動建立專屬工作表 Tab，並寫入新問卷回覆。
+ * 2. doGet(e): 自動輪詢試算表中所有工作表（各校資料），打包回傳 JSON 給講師分析儀表板即時檢視（純唯讀，絕不刪除資料）。
+ */
+
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -87,7 +98,7 @@ function doPost(e) {
     var sheet = ss.getSheetByName(schoolName);
     if (!sheet) {
       sheet = ss.insertSheet(schoolName);
-      // 新增標題列
+      // 新增標題列 (16 欄)
       sheet.appendRow([
         "填寫ID", "填寫時間", "學校名稱", "任教年段", "主要領域", 
         "教學年資", "硬體設備現況", "數位工具使用頻率", "常用數位工具與AI Agent", 
@@ -99,7 +110,7 @@ function doPost(e) {
     
     // 寫入資料
     sheet.appendRow([
-      data.id || "",
+      data.id || ("ans_" + new Date().getTime()),
       data.timestamp || new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" }),
       data.school_name || "",
       data.school_role || "",
@@ -122,6 +133,56 @@ function doPost(e) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheets = ss.getSheets();
+    var allResponses = [];
+    
+    for (var i = 0; i < sheets.length; i++) {
+      var sheet = sheets[i];
+      var values = sheet.getDataRange().getValues();
+      if (values.length <= 1) continue; // 空表或只有標題列
+      
+      // 第 0 列為標題列，從第 1 列開始讀取數據
+      for (var r = 1; r < values.length; r++) {
+        var row = values[r];
+        if (!row[0] && !row[1] && !row[2]) continue; // 空白列跳過
+        
+        allResponses.push({
+          id: String(row[0] || ""),
+          timestamp: String(row[1] || ""),
+          school_name: String(row[2] || sheet.getName()),
+          school_role: String(row[3] || ""),
+          teaching_subject: row[4] ? String(row[4]).split("、") : [],
+          teaching_years: String(row[5] || ""),
+          hardware_env: row[6] ? String(row[6]).split("、") : [],
+          tool_frequency: String(row[7] || ""),
+          app_tools: row[8] ? String(row[8]).split("、") : [],
+          ai_experience: String(row[9] || ""),
+          slc_stages: row[10] ? String(row[10]).split("、") : [],
+          pain_points: row[11] ? String(row[11]).split("、") : [],
+          confidence_digital: Number(row[12]) || 3,
+          confidence_jumping_task: Number(row[13]) || 3,
+          workshop_modules: row[14] ? String(row[14]).split("、") : [],
+          specific_question: String(row[15] || "")
+        });
+      }
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      total: allResponses.length,
+      data: allResponses
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 ```

@@ -1,7 +1,13 @@
-/**
+﻿/**
  * 學共輔導團「數位工具教與學」講師數據分析儀表板 (admin.html 專用)
  * 基於 Chart.js 實現即時統計、依學校分流篩選與資料視覺化
+ * 具備與 Google 試算表 (Google Apps Script) 即時雙向讀取同步功能（純唯讀，不破壞後端數據）
  */
+
+const STORAGE_KEY_CLOUD_CACHE = "slc_digital_survey_cloud_cache_v1";
+const STORAGE_KEY_LOCAL_RESPONSES = "slc_digital_survey_responses_v1";
+const STORAGE_KEY_WEBHOOK = "slc_survey_webhook_url";
+const DEFAULT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzBTtOKUlpt13xESLsU1z-IhaUUmVwMw6bQfNCKdhD_aWYXvLqQTm0vZTvDIyXboJgeXA/exec";
 
 class SurveyDashboard {
   constructor() {
@@ -9,11 +15,16 @@ class SurveyDashboard {
     this.allData = [];
     this.filteredData = [];
     this.selectedSchool = "ALL";
-    this.useDemoIfEmpty = false;
+    this.isSyncing = false;
 
     this.initElements();
     this.bindEvents();
-    this.refresh();
+    
+    // 優先讀取本地快取以便立即呈現畫面
+    this.loadCachedData();
+
+    // 隨後自動連線 Google 試算表拉取最新雲端數據
+    this.syncFromCloud(false);
   }
 
   initElements() {
@@ -26,10 +37,15 @@ class SurveyDashboard {
     this.dataSourceBadge = document.getElementById("data-source-badge");
     this.schoolFilterSelect = document.getElementById("school-filter");
 
+    this.btnSyncCloud = document.getElementById("btn-sync-cloud");
     this.btnExportCsv = document.getElementById("btn-export-csv");
     this.btnExportJson = document.getElementById("btn-export-json");
-    this.btnClearData = document.getElementById("btn-clear-data");
     this.btnSetWebhook = document.getElementById("btn-set-webhook");
+
+    this.syncStatusText = document.getElementById("sync-status-text");
+    this.syncLastTime = document.getElementById("sync-last-time");
+    this.statusDot = document.getElementById("status-dot");
+    this.toastEl = document.getElementById("toast");
   }
 
   bindEvents() {
@@ -40,35 +56,110 @@ class SurveyDashboard {
       });
     }
 
+    if (this.btnSyncCloud) {
+      this.btnSyncCloud.addEventListener("click", () => this.syncFromCloud(true));
+    }
+
     if (this.btnExportCsv) this.btnExportCsv.addEventListener("click", () => this.exportCSV());
     if (this.btnExportJson) this.btnExportJson.addEventListener("click", () => this.exportJSON());
-    if (this.btnClearData) this.btnClearData.addEventListener("click", () => this.clearAllData());
     if (this.btnSetWebhook) this.btnSetWebhook.addEventListener("click", () => this.configureWebhook());
   }
 
-  getRawResponses() {
-    try {
-      const stored = localStorage.getItem("slc_digital_survey_responses_v1");
-      if (stored) {
-        let parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          // 自動過濾掉任何以 demo- 開頭的舊示範數據
-          parsed = parsed.filter(d => d.id && !d.id.startsWith("demo-"));
-          // 更新乾淨的 LocalStorage
-          localStorage.setItem("slc_digital_survey_responses_v1", JSON.stringify(parsed));
+  showToast(msg, duration = 3000) {
+    if (!this.toastEl) return;
+    this.toastEl.innerHTML = `<span>💬</span> <span>${msg}</span>`;
+    this.toastEl.classList.add("show");
+    setTimeout(() => {
+      this.toastEl.classList.remove("show");
+    }, duration);
+  }
 
-          if (parsed.length > 0) {
-            if (this.dataSourceBadge) this.dataSourceBadge.textContent = `現有實際填答 (${parsed.length} 筆)`;
-            return parsed;
+  loadCachedData() {
+    try {
+      // 優先讀取雲端快取，若無則讀取本機填寫資料
+      let raw = localStorage.getItem(STORAGE_KEY_CLOUD_CACHE) || localStorage.getItem(STORAGE_KEY_LOCAL_RESPONSES);
+      if (raw) {
+        let parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          // 清除任何 demo- 開頭之示範資料
+          parsed = parsed.filter(d => d && d.id && !String(d.id).startsWith("demo-"));
+          this.allData = parsed;
+          if (this.allData.length > 0) {
+            if (this.dataSourceBadge) this.dataSourceBadge.textContent = `快取數據 (${this.allData.length} 筆)`;
+            if (this.syncStatusText) this.syncStatusText.textContent = `已載入快取資料（共 ${this.allData.length} 筆）`;
           }
         }
       }
     } catch (e) {
-      console.warn("讀取本機資料失敗", e);
+      console.warn("讀取快取失敗:", e);
+      this.allData = [];
     }
 
-    if (this.dataSourceBadge) this.dataSourceBadge.textContent = "尚無填答數據 (0 筆)";
-    return [];
+    this.populateSchoolOptions();
+    this.applyFilterAndRender();
+  }
+
+  /**
+   * 從 Google 試算表 Web App (doGet) 拉取所有學校工作表之最新數據
+   * 具備純即時讀取特性，100% 不會更動試算表內容
+   */
+  async syncFromCloud(isManual = false) {
+    if (this.isSyncing) return;
+    this.isSyncing = true;
+
+    if (this.btnSyncCloud) this.btnSyncCloud.classList.add("syncing");
+    if (this.statusDot) this.statusDot.className = "status-dot syncing";
+    if (this.syncStatusText) this.syncStatusText.textContent = "正在從 Google 試算表同步資料...";
+
+    const webhookUrl = (localStorage.getItem(STORAGE_KEY_WEBHOOK) || DEFAULT_WEBHOOK_URL).trim();
+
+    try {
+      const fetchUrl = webhookUrl + (webhookUrl.includes("?") ? "&" : "?") + "t=" + Date.now();
+      const response = await fetch(fetchUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result && result.status === "success" && Array.isArray(result.data)) {
+        // 過濾可能存在的 demo 數據
+        const validData = result.data.filter(d => d && d.id && !String(d.id).startsWith("demo-"));
+        this.allData = validData;
+
+        // 儲存至雲端快取
+        localStorage.setItem(STORAGE_KEY_CLOUD_CACHE, JSON.stringify(this.allData));
+
+        if (this.statusDot) this.statusDot.className = "status-dot online";
+        if (this.syncStatusText) this.syncStatusText.textContent = `已成功連線 Google 試算表（共 ${this.allData.length} 筆實際填答）`;
+        if (this.syncLastTime) this.syncLastTime.textContent = `最後同步：${new Date().toLocaleTimeString("zh-TW")}`;
+        if (this.dataSourceBadge) this.dataSourceBadge.textContent = `試算表即時數據 (${this.allData.length} 筆)`;
+
+        this.populateSchoolOptions();
+        this.applyFilterAndRender();
+
+        if (isManual) {
+          this.showToast(`✅ 同步完成！共取得 ${this.allData.length} 筆最新回覆。`);
+        }
+      } else {
+        throw new Error((result && result.message) || "試算表回傳格式錯誤");
+      }
+    } catch (err) {
+      console.warn("無法從 Google 試算表拉取資料:", err);
+      if (this.statusDot) this.statusDot.className = "status-dot";
+      if (this.syncStatusText) {
+        this.syncStatusText.textContent = this.allData.length > 0 
+          ? `連線中斷，顯示快取 (${this.allData.length} 筆)`
+          : `尚無法連線試算表（請確認 Apps Script 已部署 doGet）`;
+      }
+      
+      if (isManual) {
+        alert("無法從 Google 試算表同步資料，可能原因：\n1. Google Apps Script 尚未更新為包含「doGet」的新版本。\n2. 試算表網址有誤或網路連線受限。\n\n目前畫面已為您保留最近一次的填答紀錄。");
+      }
+    } finally {
+      this.isSyncing = false;
+      if (this.btnSyncCloud) this.btnSyncCloud.classList.remove("syncing");
+    }
   }
 
   populateSchoolOptions() {
@@ -84,13 +175,14 @@ class SurveyDashboard {
     });
 
     this.schoolFilterSelect.innerHTML = html;
+    if (this.selectedSchool !== "ALL" && !schools.includes(this.selectedSchool)) {
+      this.selectedSchool = "ALL";
+    }
     this.schoolFilterSelect.value = this.selectedSchool;
   }
 
   refresh() {
-    this.allData = this.getRawResponses();
-    this.populateSchoolOptions();
-    this.applyFilterAndRender();
+    this.loadCachedData();
   }
 
   applyFilterAndRender() {
@@ -150,34 +242,38 @@ class SurveyDashboard {
       return;
     }
 
-    this.renderRolesChart(data);
+    this.renderRoleChart(data);
     this.renderFrequencyChart(data);
     this.renderToolsChart(data);
     this.renderHardwareChart(data);
-    this.renderPainPointsRadar(data);
+    this.renderPainPointsChart(data);
     this.renderModulesChart(data);
   }
 
-  // 1. 年段與學群分佈 (Doughnut)
-  renderRolesChart(data) {
-    const roleCounts = {};
-    data.forEach(d => {
-      const role = d.school_role || "未填寫";
-      roleCounts[role] = (roleCounts[role] || 0) + 1;
-    });
-
+  renderRoleChart(data) {
     const ctx = document.getElementById("chart-roles");
     if (!ctx) return;
+
+    const counts = {};
+    data.forEach(d => {
+      const role = d.school_role || "未填寫";
+      counts[role] = (counts[role] || 0) + 1;
+    });
+
+    const labels = Object.keys(counts);
+    const values = Object.values(counts);
 
     if (this.charts.roles) this.charts.roles.destroy();
 
     this.charts.roles = new Chart(ctx, {
       type: "doughnut",
       data: {
-        labels: Object.keys(roleCounts),
+        labels: labels,
         datasets: [{
-          data: Object.values(roleCounts),
-          backgroundColor: ["#2d6a4f", "#52b788", "#74c69d", "#95d5b2", "#b7e4c7", "#d8f3dc"],
+          data: values,
+          backgroundColor: [
+            "#2d6a4f", "#40916c", "#52b788", "#74c69d", "#95d5b2", "#d8f3dc"
+          ],
           borderWidth: 2,
           borderColor: "#ffffff"
         }]
@@ -186,64 +282,77 @@ class SurveyDashboard {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 12 } } }
+          legend: { position: "right" }
         }
       }
     });
   }
 
-  // 2. 數位工具使用頻率 (Doughnut / Pie)
   renderFrequencyChart(data) {
-    const freqCounts = {};
-    data.forEach(d => {
-      const freq = d.tool_frequency || "未填寫";
-      freqCounts[freq] = (freqCounts[freq] || 0) + 1;
-    });
-
     const ctx = document.getElementById("chart-frequency");
     if (!ctx) return;
+
+    const freqOrder = [
+      "幾乎每堂課使用 (每週 4 次以上)",
+      "經常使用 (每週 2~3 次)",
+      "偶爾使用 (每週 1 次)",
+      "較少使用 (每月 1~2 次)",
+      "極少使用 / 僅公開授課時使用",
+      "目前從未使用"
+    ];
+
+    const counts = {};
+    freqOrder.forEach(f => counts[f] = 0);
+
+    data.forEach(d => {
+      if (d.tool_frequency) {
+        counts[d.tool_frequency] = (counts[d.tool_frequency] || 0) + 1;
+      }
+    });
 
     if (this.charts.frequency) this.charts.frequency.destroy();
 
     this.charts.frequency = new Chart(ctx, {
-      type: "doughnut",
+      type: "bar",
       data: {
-        labels: Object.keys(freqCounts),
+        labels: freqOrder.map(f => f.split(" (")[0]),
         datasets: [{
-          data: Object.values(freqCounts),
-          backgroundColor: ["#40916c", "#52b788", "#74c69d", "#e9c46a", "#f4a261", "#e76f51"],
-          borderWidth: 2,
-          borderColor: "#ffffff"
+          label: "教師人數",
+          data: freqOrder.map(f => counts[f]),
+          backgroundColor: "#52b788",
+          borderRadius: 6
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 12 } } }
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } }
         }
       }
     });
   }
 
-  // 3. 常用軟體與 AI 工具排行 (Horizontal Bar)
   renderToolsChart(data) {
-    const toolCounts = {};
-    data.forEach(d => {
-      if (Array.isArray(d.app_tools)) {
-        d.app_tools.forEach(t => {
-          const shortName = t.split(" (")[0];
-          toolCounts[shortName] = (toolCounts[shortName] || 0) + 1;
-        });
-      }
-    });
-
-    const sorted = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]);
-    const labels = sorted.map(s => s[0]);
-    const counts = sorted.map(s => s[1]);
-
     const ctx = document.getElementById("chart-tools");
     if (!ctx) return;
+
+    const counts = {};
+    data.forEach(d => {
+      const tools = Array.isArray(d.app_tools) ? d.app_tools : (d.app_tools ? [d.app_tools] : []);
+      tools.forEach(t => {
+        const clean = t.split(" (")[0].trim();
+        counts[clean] = (counts[clean] || 0) + 1;
+      });
+    });
+
+    // 依使用人數排序
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const labels = sorted.map(s => s[0]);
+    const values = sorted.map(s => s[1]);
 
     if (this.charts.tools) this.charts.tools.destroy();
 
@@ -253,8 +362,8 @@ class SurveyDashboard {
         labels: labels,
         datasets: [{
           label: "使用人數",
-          data: counts,
-          backgroundColor: "#40916c",
+          data: values,
+          backgroundColor: "#2d6a4f",
           borderRadius: 6
         }]
       },
@@ -262,102 +371,89 @@ class SurveyDashboard {
         indexAxis: "y",
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { stepSize: 1 } }
-        },
         plugins: {
           legend: { display: false }
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0 } }
         }
       }
     });
   }
 
-  // 4. 校園硬體環境現況 (Bar)
   renderHardwareChart(data) {
-    const hwCounts = {};
-    data.forEach(d => {
-      if (Array.isArray(d.hardware_env)) {
-        d.hardware_env.forEach(h => {
-          const shortName = h.replace("教室內建", "").replace("學生 1:1 ", "1:1 ");
-          hwCounts[shortName] = (hwCounts[shortName] || 0) + 1;
-        });
-      }
-    });
-
-    const sorted = Object.entries(hwCounts).sort((a, b) => b[1] - a[1]);
     const ctx = document.getElementById("chart-hardware");
     if (!ctx) return;
+
+    const counts = {};
+    data.forEach(d => {
+      const hw = Array.isArray(d.hardware_env) ? d.hardware_env : (d.hardware_env ? [d.hardware_env] : []);
+      hw.forEach(h => {
+        const clean = h.split(" (")[0].trim();
+        counts[clean] = (counts[clean] || 0) + 1;
+      });
+    });
+
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const labels = sorted.map(s => s[0]);
+    const values = sorted.map(s => s[1]);
 
     if (this.charts.hardware) this.charts.hardware.destroy();
 
     this.charts.hardware = new Chart(ctx, {
       type: "bar",
       data: {
-        labels: sorted.map(s => s[0]),
+        labels: labels,
         datasets: [{
-          label: "具備教師數",
-          data: sorted.map(s => s[1]),
+          label: "教室數量/人數",
+          data: values,
           backgroundColor: "#457b9d",
           borderRadius: 6
         }]
       },
       options: {
+        indexAxis: "y",
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          y: { ticks: { stepSize: 1 } }
-        },
         plugins: {
           legend: { display: false }
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0 } }
         }
       }
     });
   }
 
-  // 5. 學共課堂痛點與卡點 (Radar)
-  renderPainPointsRadar(data) {
-    const painCounts = {
-      "載具分心管理": 0,
-      "操作耗時壓縮對話": 0,
-      "跳躍任務設計難": 0,
-      "缺乏學共現成教材": 0,
-      "設備與連線問題": 0,
-      "AI融入教案不知所措": 0,
-      "擔憂弱化實體傾聽": 0
-    };
-
-    data.forEach(d => {
-      if (Array.isArray(d.pain_points)) {
-        d.pain_points.forEach(p => {
-          if (p.includes("分心")) painCounts["載具分心管理"]++;
-          else if (p.includes("耗時")) painCounts["操作耗時壓縮對話"]++;
-          else if (p.includes("跳躍任務")) painCounts["跳躍任務設計難"]++;
-          else if (p.includes("缺乏")) painCounts["缺乏學共現成教材"]++;
-          else if (p.includes("連線") || p.includes("設備")) painCounts["設備與連線問題"]++;
-          else if (p.includes("AI")) painCounts["AI融入教案不知所措"]++;
-          else if (p.includes("傾聽")) painCounts["擔憂弱化實體傾聽"]++;
-        });
-      }
-    });
-
+  renderPainPointsChart(data) {
     const ctx = document.getElementById("chart-painpoints");
     if (!ctx) return;
+
+    const counts = {};
+    data.forEach(d => {
+      const pts = Array.isArray(d.pain_points) ? d.pain_points : (d.pain_points ? [d.pain_points] : []);
+      pts.forEach(p => {
+        const shortLabel = p.length > 12 ? p.substring(0, 12) + "..." : p;
+        counts[shortLabel] = (counts[shortLabel] || 0) + 1;
+      });
+    });
+
+    const labels = Object.keys(counts);
+    const values = Object.values(counts);
 
     if (this.charts.painpoints) this.charts.painpoints.destroy();
 
     this.charts.painpoints = new Chart(ctx, {
       type: "radar",
       data: {
-        labels: Object.keys(painCounts),
+        labels: labels,
         datasets: [{
-          label: "痛點頻率",
-          data: Object.values(painCounts),
-          backgroundColor: "rgba(231, 111, 81, 0.25)",
+          label: "痛點提及次數",
+          data: values,
+          backgroundColor: "rgba(231, 111, 81, 0.2)",
           borderColor: "#e76f51",
           pointBackgroundColor: "#e76f51",
-          pointBorderColor: "#fff",
-          pointHoverBackgroundColor: "#fff",
-          pointHoverBorderColor: "#e76f51"
+          borderWidth: 2
         }]
       },
       options: {
@@ -365,44 +461,43 @@ class SurveyDashboard {
         maintainAspectRatio: false,
         scales: {
           r: {
-            angleLines: { color: "#e2e8f0" },
-            grid: { color: "#e2e8f0" },
-            ticks: { stepSize: 1, backdropColor: "transparent" }
+            beginAtZero: true,
+            ticks: { precision: 0 }
           }
-        },
-        plugins: {
-          legend: { display: false }
         }
       }
     });
   }
 
-  // 6. 研習模組期待排行 (Bar)
   renderModulesChart(data) {
-    const modCounts = {};
-    data.forEach(d => {
-      if (Array.isArray(d.workshop_modules)) {
-        d.workshop_modules.forEach(m => {
-          const modKey = m.split("：")[0].replace("【", "").replace("】", "");
-          modCounts[modKey] = (modCounts[modKey] || 0) + 1;
-        });
-      }
-    });
-
-    const sorted = Object.entries(modCounts).sort((a, b) => b[1] - a[1]);
     const ctx = document.getElementById("chart-modules");
     if (!ctx) return;
+
+    const counts = {};
+    data.forEach(d => {
+      const mods = Array.isArray(d.workshop_modules) ? d.workshop_modules : (d.workshop_modules ? [d.workshop_modules] : []);
+      mods.forEach(m => {
+        // 抓取 【模組X】 簡短標題
+        const match = m.match(/【模組[A-Z]】[^：:]*/);
+        const title = match ? match[0] : (m.length > 15 ? m.substring(0, 15) + "..." : m);
+        counts[title] = (counts[title] || 0) + 1;
+      });
+    });
+
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const labels = sorted.map(s => s[0]);
+    const values = sorted.map(s => s[1]);
 
     if (this.charts.modules) this.charts.modules.destroy();
 
     this.charts.modules = new Chart(ctx, {
       type: "bar",
       data: {
-        labels: sorted.map(s => s[0]),
+        labels: labels,
         datasets: [{
-          label: "期待票數",
-          data: sorted.map(s => s[1]),
-          backgroundColor: "#2a9d8f",
+          label: "票選期待度",
+          data: values,
+          backgroundColor: "#e76f51",
           borderRadius: 6
         }]
       },
@@ -410,11 +505,11 @@ class SurveyDashboard {
         indexAxis: "y",
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { stepSize: 1 } }
-        },
         plugins: {
           legend: { display: false }
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0 } }
         }
       }
     });
@@ -423,30 +518,32 @@ class SurveyDashboard {
   renderQuestionsList() {
     if (!this.questionsFeedEl) return;
 
-    const data = this.filteredData.filter(d => d.specific_question && d.specific_question.trim() !== "");
+    const data = this.filteredData.filter(d => d.specific_question && d.specific_question.trim().length > 0);
 
     if (data.length === 0) {
       this.questionsFeedEl.innerHTML = `
-        <div style="text-align:center; padding: 24px; color: #888;">
-          目前所選範圍尚無個別提問，可於研習現場即時交流。
+        <div style="text-align: center; color: var(--text-muted); padding: 30px;">
+          <span>💬</span> 目前在此篩選範圍下尚無填寫個別提問。
         </div>
       `;
       return;
     }
 
     let html = "";
-    data.forEach(item => {
-      const sch = item.school_name || "未指定學校";
-      const subjectStr = Array.isArray(item.teaching_subject) ? item.teaching_subject.join("、") : (item.teaching_subject || "綜合");
-      
+    data.forEach(d => {
+      const schoolTag = d.school_name ? `<span class="q-tag" style="background:#e8f5e9; color:#2d6a4f;">${this.escapeHtml(d.school_name)}</span>` : "";
+      const roleTag = d.school_role ? `<span class="q-tag">${this.escapeHtml(d.school_role)}</span>` : "";
+      const subj = Array.isArray(d.teaching_subject) ? d.teaching_subject.join(" / ") : (d.teaching_subject || "");
+      const subjTag = subj ? `<span class="q-tag">${this.escapeHtml(subj)}</span>` : "";
+
       html += `
-        <div class="question-post-card">
-          <div class="question-post-header">
-            <span>🏫 <strong>${this.escapeHtml(sch)}</strong> ｜ ${item.school_role || "教師"} ｜ ${subjectStr}</span>
-            <span>🕒 ${item.timestamp || "近期"}</span>
-          </div>
-          <div class="question-post-content">
-            ${item.specific_question ? `「${this.escapeHtml(item.specific_question)}」` : "（未填寫個別提問）"}
+        <div class="question-item">
+          <div class="q-text">「${this.escapeHtml(d.specific_question)}」</div>
+          <div class="q-meta">
+            ${schoolTag}
+            ${roleTag}
+            ${subjTag}
+            <span style="font-size: 0.75rem; color: var(--text-light);">${this.escapeHtml(d.timestamp || "")}</span>
           </div>
         </div>
       `;
@@ -465,25 +562,18 @@ class SurveyDashboard {
       .replace(/'/g, "&#039;");
   }
 
-  clearAllData() {
-    if (confirm("確定要清除所有已填寫的問卷資料嗎？清除後將無法復原。")) {
-      localStorage.removeItem("slc_digital_survey_responses_v1");
-      this.refresh();
-      alert("資料已清空！");
-    }
-  }
-
   configureWebhook() {
-    const current = localStorage.getItem("slc_survey_webhook_url") || "";
+    const current = localStorage.getItem(STORAGE_KEY_WEBHOOK) || DEFAULT_WEBHOOK_URL;
     const input = prompt("請輸入 Google Apps Script Webhook 網址（留空則使用系統預設）：", current);
     if (input !== null) {
       if (input.trim() === "") {
-        localStorage.removeItem("slc_survey_webhook_url");
+        localStorage.removeItem(STORAGE_KEY_WEBHOOK);
         alert("已重設為系統預設 Webhook。");
       } else {
-        localStorage.setItem("slc_survey_webhook_url", input.trim());
-        alert("Webhook 網址已儲存！");
+        localStorage.setItem(STORAGE_KEY_WEBHOOK, input.trim());
+        alert("Webhook 網址已儲存！將立即從該網址同步資料。");
       }
+      this.syncFromCloud(true);
     }
   }
 
@@ -496,7 +586,7 @@ class SurveyDashboard {
 
     const headers = [
       "ID", "填寫時間", "學校名稱", "任教年段", "主要領域", "教學年資",
-      "硬體設備現況", "數位工具使用頻率", "常用數位工具類別與名稱", "AI使用經驗",
+      "硬體設備現況", "數位工具使用頻率", "常用數位工具與AI Agent", "AI使用經驗",
       "學共融入環節", "最大卡點", "數位操作信心度(1-5)", "跳躍任務信心度(1-5)",
       "期待研習模組", "現場個別提問"
     ];

@@ -60,18 +60,32 @@
             </select>
           </div>
 
+          <!-- 雲端試算表即時同步按鈕 -->
+          <button class="btn-sync" id="btn-sync-cloud" title="立即從 Google 試算表拉取最新填答數據">
+            <span class="sync-icon">🔄</span> 同步試算表數據
+          </button>
+
           <button class="btn-outline" id="btn-export-csv" title="匯出為 Excel 相容的 CSV 檔案">
             <span>📥</span> 匯出 CSV (Excel)
           </button>
           <button class="btn-outline" id="btn-export-json" title="匯出 JSON 資料備份">
             <span>💾</span> 匯出 JSON
           </button>
-          <button class="btn-outline" id="btn-set-webhook" title="設定 Google 試算表 Webhook 同步">
-            <span>🔗</span> 雲端同步設定
+          <button class="btn-outline" id="btn-set-webhook" title="設定 Google 試算表 Webhook 網址">
+            <span>⚙️</span> 雲端 API 設定
           </button>
-          <button class="btn-outline" id="btn-clear-data" style="color: #c0392b;" title="清空所有本機調查資料">
-            <span>🗑️</span> 清除數據
-          </button>
+        </div>
+
+        <!-- 即時唯讀連線狀態列 -->
+        <div class="sync-status-bar">
+          <div class="sync-status-info">
+            <span class="status-dot online" id="status-dot"></span>
+            <span id="sync-status-text">雲端試算表連線中...</span>
+            <span class="sync-time" id="sync-last-time"></span>
+          </div>
+          <div class="sync-readonly-tag">
+            <span>🔒 唯讀模式：資料安全保存在 Google 試算表（不修改/不刪除原始內容）</span>
+          </div>
         </div>
       </div>
 
